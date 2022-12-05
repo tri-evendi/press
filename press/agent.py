@@ -248,7 +248,7 @@ class Agent:
 		)
 
 	def update_site(self, site, target, deploy_type, skip_failing_patches=False):
-		activate = site.status_before_update == "Active"
+		activate = site.status_before_update in ("Active", "Broken")
 		data = {
 			"target": target,
 			"activate": activate,
@@ -652,6 +652,31 @@ class Agent:
 		return self.create_agent_job(
 			"Run After Migrate Steps",
 			f"benches/{site.bench}/sites/{site.name}/run_after_migrate_steps",
+			bench=site.bench,
+			site=site.name,
+		)
+
+	def move_site_to_bench(
+		self,
+		site,
+		target,
+		deactivate=True,
+		skip_failing_patches=False,
+	):
+		"""
+		Move site to bench without backup
+		"""
+		activate = site.status not in ("Inactive", "Suspended")
+		data = {
+			"target": target,
+			"deactivate": deactivate,
+			"activate": activate,
+			"skip_failing_patches": skip_failing_patches,
+		}
+		return self.create_agent_job(
+			f"Move Site to Bench",
+			f"benches/{site.bench}/sites/{site.name}/move_to_bench",
+			data,
 			bench=site.bench,
 			site=site.name,
 		)

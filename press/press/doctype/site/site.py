@@ -396,6 +396,12 @@ class Site(Document):
 			}
 		).insert()
 
+	@frappe.whitelist()
+	def move_to_bench(self, bench, deactivate=True, skip_failing_patches=False):
+		log_site_activity(self.name, "Update")
+		agent = Agent(self.server)
+		agent.move_site_to_bench(self, bench, deactivate, skip_failing_patches)
+
 	def reset_previous_status(self):
 		self.status = self.status_before_update
 		self.status_before_update = None
@@ -1386,6 +1392,19 @@ def process_add_proxysql_user_job_update(job):
 def process_remove_proxysql_user_job_update(job):
 	if job.status == "Success":
 		frappe.db.set_value("Site", job.site, "is_database_access_enabled", False)
+
+
+def process_move_site_to_bench_job_update(job):
+	if job.status in ("Success", "Failure"):
+		dest_bench = json.loads(job.request_data).get("target")
+		dest_group = frappe.db.get_value("Bench", dest_bench, "group")
+
+		move_site_step_status = frappe.db.get_value(
+			"Agent Job Step", {"step_name": "Move Site", "agent_job": job.name}, "status"
+		)
+		if move_site_step_status == "Success":
+			frappe.db.set_value("Site", job.site, "bench", dest_bench)
+			frappe.db.set_value("Site", job.site, "group", dest_group)
 
 
 def update_records_for_rename(job):
