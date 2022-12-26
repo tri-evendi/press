@@ -296,7 +296,16 @@ class Site(Document):
 	def migrate(self, skip_failing_patches=False):
 		log_site_activity(self.name, "Migrate")
 		agent = Agent(self.server)
-		agent.migrate_site(self, skip_failing_patches=skip_failing_patches)
+		activate = True
+		if self.status in ("Inactive", "Suspended"):
+			activate = False
+			self.status_before_update = self.status
+		elif self.status == "Broken" and self.status_before_update in (
+			"Inactive",
+			"Suspended",
+		):
+			activate = False
+		agent.migrate_site(self, skip_failing_patches=skip_failing_patches, activate=activate)
 		self.status = "Pending"
 		self.save()
 
@@ -573,7 +582,6 @@ class Site(Document):
 		)
 		self.disable_subscription()
 		self.disable_marketplace_subscriptions()
-		self.disable_saas_susbcription()
 
 	@frappe.whitelist()
 	def cleanup_after_archive(self):
@@ -850,7 +858,7 @@ class Site(Document):
 	def disable_subscription(self):
 		subscription = self.subscription
 		if subscription:
-			subscription.disable()
+			frappe.db.set_value("Subscription", subscription.name, "enabled", False)
 
 	def disable_marketplace_subscriptions(self):
 		app_subscriptions = frappe.get_all(
@@ -861,13 +869,6 @@ class Site(Document):
 
 		for subscription in app_subscriptions:
 			subscription_doc = frappe.get_doc("Marketplace App Subscription", subscription)
-			subscription_doc.disable()
-
-	def disable_saas_susbcription(self):
-		if frappe.db.exists("Saas App Subscription", {"status": "Active", "site": self.name}):
-			subscription_doc = frappe.get_doc(
-				"Saas App Subscription", {"status": "Active", "site": self.name}
-			)
 			subscription_doc.disable()
 
 	def can_change_plan(self, ignore_card_setup):
@@ -1348,6 +1349,11 @@ def process_migrate_site_job_update(job):
 		"Failure": "Broken",
 	}[job.status]
 
+	if updated_status == "Active":
+		site = frappe.get_doc("Site", job.site)
+		if site.status_before_update:
+			site.reset_previous_status()
+			return
 	site_status = frappe.get_value("Site", job.site, "status")
 	if updated_status != site_status:
 		frappe.db.set_value("Site", job.site, "status", updated_status)
@@ -1453,3 +1459,38 @@ def process_restore_tables_job_update(job):
 
 
 get_permission_query_conditions = get_permission_query_conditions_for_doctype("Site")
+
+
+def prepare_site(site: str, subdomain: str = None) -> Dict:
+	# prepare site details
+	doc = frappe.get_doc("Site", site)
+	sitename = subdomain if subdomain else "brt-" + doc.subdomain
+	app_plans = [app.app for app in doc.apps]
+	backups = frappe.get_all(
+		"Site Backup",
+		dict(
+			status="Success", with_files=1, site=site, files_availability="Available", offsite=1
+		),
+		pluck="name",
+	)
+	if not backups:
+		frappe.throw("Backup Files not found.")
+	backup = frappe.get_doc("Site Backup", backups[0])
+
+	files = {
+		"config": "",  # not necessary for test sites
+		"database": backup.remote_database_file,
+		"public": backup.remote_public_file,
+		"private": backup.remote_private_file,
+	}
+	site_dict = {
+		"domain": frappe.db.get_single_value("Press Settings", "domain"),
+		"plan": doc.plan,
+		"name": sitename,
+		"group": doc.group,
+		"selected_app_plans": {},
+		"apps": app_plans,
+		"files": files,
+	}
+
+	return site_dict

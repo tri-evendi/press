@@ -228,8 +228,8 @@ class Agent:
 			site=site.name,
 		)
 
-	def migrate_site(self, site, skip_failing_patches=False):
-		data = {"skip_failing_patches": skip_failing_patches}
+	def migrate_site(self, site, skip_failing_patches=False, activate=True):
+		data = {"skip_failing_patches": skip_failing_patches, "activate": activate}
 		return self.create_agent_job(
 			"Migrate Site",
 			f"benches/{site.bench}/sites/{site.name}/migrate",
@@ -329,14 +329,18 @@ class Agent:
 		if offsite:
 			settings = frappe.get_single("Press Settings")
 			backups_path = os.path.join(site.name, str(date.today()))
-			backup_bucket = get_backup_bucket(site.cluster)
-			if settings.aws_s3_bucket or backup_bucket:
+			backup_bucket = get_backup_bucket(site.cluster, region=True)
+			bucket_name = (
+				backup_bucket.get("name") if backup_bucket.get("name") else backup_bucket
+			)
+			if settings.aws_s3_bucket or bucket_name:
 				auth = {
 					"ACCESS_KEY": settings.offsite_backups_access_key_id,
 					"SECRET_KEY": settings.get_password("offsite_backups_secret_access_key"),
+					"REGION": backup_bucket.get("region"),
 				}
 				data.update(
-					{"offsite": {"bucket": backup_bucket, "auth": auth, "path": backups_path}}
+					{"offsite": {"bucket": bucket_name, "auth": auth, "path": backups_path}}
 				)
 
 			else:

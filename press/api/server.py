@@ -167,23 +167,6 @@ def new(server):
 
 
 @frappe.whitelist()
-def search_list():
-	servers = frappe.get_list(
-		"Server",
-		fields=["name as server", "title"],
-		filters={"status": ("!=", "Archived"), "team": get_current_team()},
-		order_by="creation desc",
-	)
-	database_servers = frappe.get_list(
-		"Database Server",
-		fields=["name as server", "title"],
-		filters={"status": ("!=", "Archived"), "team": get_current_team()},
-		order_by="creation desc",
-	)
-	return servers + database_servers
-
-
-@frappe.whitelist()
 @protected(["Server", "Database Server"])
 def usage(name):
 	query_map = {
@@ -197,6 +180,31 @@ def usage(name):
 		),
 		"memory": (
 			f"""(node_memory_MemTotal_bytes{{instance="{name}",job="node"}} - node_memory_MemFree_bytes{{instance="{name}",job="node"}} - (node_memory_Cached_bytes{{instance="{name}",job="node"}} + node_memory_Buffers_bytes{{instance="{name}",job="node"}})) / (1024 * 1024)""",
+			lambda x: x,
+		),
+	}
+
+	result = {}
+	for usage_type, query in query_map.items():
+		response = prometheus_query(query[0], query[1], "Asia/Kolkata", 120, 120)["datasets"]
+		if response:
+			result[usage_type] = response[0]["values"][-1]
+	return result
+
+
+@protected(["Server", "Database Server"])
+def total_resource(name):
+	query_map = {
+		"vcpu": (
+			f"""(count(count(node_cpu_seconds_total{{instance="{name}",job="node"}}) by (cpu)))""",
+			lambda x: x,
+		),
+		"disk": (
+			f"""(node_filesystem_size_bytes{{instance="{name}", job="node", mountpoint="/"}}) / (1024 * 1024 * 1024)""",
+			lambda x: x,
+		),
+		"memory": (
+			f"""(node_memory_MemTotal_bytes{{instance="{name}",job="node"}}) / (1024 * 1024)""",
 			lambda x: x,
 		),
 	}

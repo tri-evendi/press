@@ -182,6 +182,7 @@ scheduler_events = {
 		"press.press.audit.check_offsite_backups",
 		"press.press.audit.check_backup_records",
 		"press.press.audit.check_app_server_replica_benches",
+		"press.press.audit.check_unbilled_subscriptions",
 		"press.press.doctype.invoice.invoice.finalize_unpaid_prepaid_credit_invoices",
 		"press.press.doctype.bench.bench.sync_analytics",
 		"press.saas.doctype.saas_app_subscription.saas_app_subscription.suspend_prepaid_subscriptions",
@@ -224,6 +225,7 @@ scheduler_events = {
 		"*/5 * * * *": [
 			"press.press.doctype.central_site_migration.central_site_migration.start_one_migration",
 			"press.press.doctype.version_upgrade.version_upgrade.update_from_site_update",
+			"press.press.doctype.site_replication.site_replication.update_from_site",
 		],
 		"*/10 * * * *": ["press.press.doctype.site.saas_pool.create"],
 		"*/30 * * * *": ["press.press.doctype.site_update.scheduled_auto_updates.trigger"],
