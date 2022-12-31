@@ -145,6 +145,7 @@ class DeployCandidate(Document):
 			self.build_end = now()
 			self.build_duration = self.build_end - self.build_start
 			self.save()
+			frappe.db.commit()
 
 	def add_build_steps(self):
 		if self.build_steps:
@@ -546,7 +547,7 @@ class DeployCandidate(Document):
 			"id_rsa-cert.pub": self.user_certificate,
 		}
 
-	def create_deploy(self, staging: bool):
+	def create_deploy(self, staging: bool = False):
 		deploy_doc = None
 		if staging:
 			servers = [Server.get_one_staging()]
@@ -564,7 +565,7 @@ class DeployCandidate(Document):
 
 		return self._create_deploy(servers, staging)
 
-	def _create_deploy(self, servers: List[str], staging):
+	def _create_deploy(self, servers: List[str], staging=False):
 		deploy = frappe.get_doc(
 			{
 				"doctype": "Deploy",

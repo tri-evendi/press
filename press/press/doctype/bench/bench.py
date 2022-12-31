@@ -294,6 +294,15 @@ class Bench(Document):
 			).insert()
 
 	@frappe.whitelist()
+	def retry_bench(self):
+
+		if frappe.get_value("Deploy Candidate", self.candidate, "status") != "Success":
+			frappe.throw(f"Deploy Candidate {self.candidate} is not Active")
+
+		candidate = frappe.get_doc("Deploy Candidate", self.candidate)
+		candidate._create_deploy([self.server])
+
+	@frappe.whitelist()
 	def restart(self, web_only=False):
 		agent = Agent(self.server)
 		agent.restart_bench(self, web_only=web_only)
