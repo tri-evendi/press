@@ -131,10 +131,29 @@ export default {
 				},
 				auto: true,
 				onSuccess() {},
-				onError(e) {
-					if (e.indexOf('not found') >= 0) {
-						this.$router.replace('/404NotFound');
-					}
+				onError: this.$routeTo404PageIfNotFound
+			};
+		},
+		reboot() {
+			return {
+				method: 'press.api.server.reboot',
+				params: {
+					name: this.serverName
+				},
+				onSuccess(data) {
+					this.$notify({
+						title: 'Server Reboot Scheduled Successfully',
+						color: 'green',
+						icon: 'check'
+					});
+					this.$resources.server.reload();
+				},
+				onError() {
+					this.$notify({
+						title: 'An error occurred',
+						color: 'red',
+						icon: 'x'
+					});
 				}
 			};
 		}
@@ -195,6 +214,14 @@ export default {
 							'_blank'
 						);
 					}
+				},
+				this.server.status === 'Active' && {
+					label: 'Reboot',
+					icon: 'tool',
+					loading: this.$resources.reboot.loading,
+					action: () => {
+						return this.$resources.reboot.submit();
+					}
 				}
 			].filter(Boolean);
 		},
@@ -205,12 +232,13 @@ export default {
 				{ label: 'Installing', route: 'install' },
 				{ label: 'Overview', route: 'overview' },
 				{ label: 'Analytics', route: 'analytics' },
+				{ label: 'Benches', route: 'benches' },
 				{ label: 'Jobs', route: 'jobs', showRedDot: this.runningJob },
 				{ label: 'Plays', route: 'plays', showRedDot: this.runningPlay }
 			];
 
 			let tabsByStatus = {
-				Active: ['Overview', 'Analytics', 'Jobs', 'Plays'],
+				Active: ['Overview', 'Analytics', 'Benches', 'Jobs', 'Plays'],
 				Pending: ['Installing'],
 				Installing: ['Installing']
 			};

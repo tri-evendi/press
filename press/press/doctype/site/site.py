@@ -705,13 +705,20 @@ class Site(Document):
 			if same_as_last_usage:
 				return
 
-			site_usage = frappe.get_doc({"doctype": "Site Usage", **site_usage_data}).insert()
-
+			equivalent_site_time = None
 			if usage.get("timestamp"):
 				equivalent_site_time = convert_utc_to_user_timezone(
 					dateutil.parser.parse(usage["timestamp"])
-				)
-				site_usage.db_set("creation", equivalent_site_time.replace(tzinfo=None))
+				).replace(tzinfo=None)
+				if frappe.db.exists(
+					"Site Usage", {"site": self.name, "creation": equivalent_site_time}
+				):
+					return
+
+			site_usage = frappe.get_doc({"doctype": "Site Usage", **site_usage_data}).insert()
+
+			if equivalent_site_time:
+				site_usage.db_set("creation", equivalent_site_time)
 
 		if isinstance(fetched_usage, list):
 			for usage in fetched_usage:
@@ -737,6 +744,7 @@ class Site(Document):
 			return True
 		return False
 
+	@frappe.whitelist()
 	def sync_info(self, data=None):
 		"""Updates Site Usage, site.config and timezone details for site."""
 		if not data:
@@ -912,9 +920,6 @@ class Site(Document):
 		self.reload()
 		if self.status == "Suspended":
 			self.unsuspend_if_applicable()
-		else:
-			# trigger agent job only once
-			self.update_site_config(plan_config)
 
 		if self.trial_end_date:
 			self.reload()
@@ -1285,6 +1290,14 @@ def process_archive_site_job_update(job):
 		dict(test_site=job.site, status=("in", ("Success", "Archive Failed"))),
 		pluck="name",
 	)
+
+	# Consider Archive Job successful if archive step succeeded
+	if job.status == "Failure" and job.job_type == "Archive Site":
+		archive_step_status = frappe.db.get_value(
+			"Agent Job Step", {"step_name": "Archive Site", "agent_job": job.name}, "status"
+		)
+		if archive_step_status == "Success":
+			first = archive_step_status
 
 	if "Success" == first == second:
 		updated_status = "Archived"

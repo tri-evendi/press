@@ -181,6 +181,8 @@ class Bench(Document):
 		agent = Agent(self.server)
 		data = agent.get_sites_info(self, since=last_synced_time)
 		for site, info in data.items():
+			if not frappe.db.exists("Site", site):
+				continue
 			try:
 				frappe.get_doc("Site", site).sync_info(info)
 				frappe.db.commit()
@@ -449,9 +451,11 @@ def archive_obsolete_benches():
 			):
 				try:
 					frappe.get_doc("Bench", bench.name).archive()
-					return
+					frappe.db.commit()
+					break
 				except Exception:
 					log_error("Bench Archival Error", bench=bench.name)
+					frappe.db.rollback()
 
 
 def sync_benches():

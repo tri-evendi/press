@@ -6,6 +6,7 @@ import requests
 
 from press.utils import get_current_team, group_children_in_result
 from press.api.site import protected
+from press.api.bench import all as all_benches
 from frappe.utils import convert_utc_to_timezone
 from frappe.utils.password import get_decrypted_password
 from datetime import datetime, timezone as tz
@@ -16,6 +17,7 @@ def poly_get_doc(doctypes, name):
 	for doctype in doctypes:
 		if frappe.db.exists(doctype, name):
 			return frappe.get_doc(doctype, name)
+	return frappe.get_doc(doctypes[-1], name)
 
 
 @frappe.whitelist()
@@ -422,3 +424,20 @@ def press_jobs(name):
 @protected("Server")
 def get_title_and_cluster(name):
 	return frappe.db.get_value("Server", name, ["title", "cluster"], as_dict=True)
+
+
+@frappe.whitelist()
+@protected(["Server", "Database Server"])
+def groups(name):
+	server = poly_get_doc(["Server", "Database Server"], name)
+	if server.doctype == "Database Server":
+		app_server = frappe.db.get_value("Server", {"database_server": server.name}, "name")
+		server = frappe.get_doc("Server", app_server)
+
+	return all_benches(server=server.name)
+
+
+@frappe.whitelist()
+@protected(["Server", "Database Server"])
+def reboot(name):
+	return poly_get_doc(["Server", "Database Server"], name).reboot()
